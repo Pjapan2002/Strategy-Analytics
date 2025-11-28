@@ -3,12 +3,6 @@ from mysql.connector import Error
 import pandas as pd
 from datetime import datetime
 
-HOST = "192.168.100.62"
-USER = "sa"
-PASSWORD = "sa.1"
-DATABASE = "dropcopy"
-PORT = "3306"
-
 
 def get_mysql_connection(
     host: str,
@@ -111,8 +105,8 @@ def get_dc_trades(connection, exchange):
 
 if __name__ == "__main__":
     try:
-        date_str = "20251127"
-        exchange = "NSE"
+        date_str = "20251128"
+        exchange = "BSE"
         engine = get_mysql_connection(host=HOST, user=USER, password=PASSWORD, database=DATABASE, port=PORT)
         # # BSE
         # df = get_dc_trades(engine, "BSE")

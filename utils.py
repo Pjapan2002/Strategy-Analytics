@@ -6,6 +6,7 @@ import json
 import requests
 import os
 import zipfile
+import shutil
 import io
 
 load_dotenv()
@@ -254,7 +255,7 @@ def calculate_net_pnl(trades_df, bhav_df):
                     pnl += (open_px - px) * match_qty
                     # pnl += (open_px - px)
                     # realized_trades.append([sec, match_qty, open_px, px, pnl])
-                    realized_trades.append([sec, match_qty, open_px, px, pnl, "short"])
+                    # realized_trades.append([sec, match_qty, open_px, px, pnl, "short"])
 
                     open_qty -= match_qty
                     buy_qty -= match_qty
@@ -267,6 +268,8 @@ def calculate_net_pnl(trades_df, bhav_df):
                             open_qty, open_px, open_side = open_positions[sec][0]
                     else:
                         open_positions[sec][0][0] = open_qty
+                # append realized pnl
+                realized_trades.append([sec, match_qty, open_px, px, pnl, "short"])
 
         if side == 2: # SELL
             if len(open_positions[sec]) == 0:
@@ -291,7 +294,7 @@ def calculate_net_pnl(trades_df, bhav_df):
                     pnl += (px - open_px) * match_qty
                     # pnl += (px - open_px)
                     # realized_trades.append([sec, match_qty, open_px, px, pnl])
-                    realized_trades.append([sec, match_qty, open_px, px, pnl, "long"])
+                    # realized_trades.append([sec, match_qty, open_px, px, pnl, "long"])
 
                     open_qty -= match_qty
                     sell_qty -= match_qty
@@ -304,6 +307,8 @@ def calculate_net_pnl(trades_df, bhav_df):
                             open_qty, open_px, open_side = open_positions[sec][0]
                     else:
                         open_positions[sec][0][0] = open_qty
+                # append realized pnl
+                realized_trades.append([sec, match_qty, open_px, px, pnl, "long"])
 
     realized_df = pd.DataFrame(
         realized_trades,
@@ -326,7 +331,8 @@ def calculate_net_pnl(trades_df, bhav_df):
                 ["sttlmPrice", "lastPrice", "closePrice", "isExpiryToday"]
                 ].iloc[0].to_dict()
             if close_price_df["isExpiryToday"]:
-                close_price = close_price_df["closePrice"]
+                # close_price = close_price_df["closePrice"]
+                close_price = close_price_df["lastPrice"]
             else:
                 close_price = close_price_df["sttlmPrice"]
                 # close_price = close_price_df["closePrice"]
@@ -368,6 +374,7 @@ def calculate_net_pnl(trades_df, bhav_df):
         }
     }
 
+
 def get_clientWise_pnl(ctclWisePnl:dict):
     realizedPnl, m2mPnl, netPnl = 0, 0, 0
     for ctcl in ctclWisePnl.values():
@@ -377,6 +384,23 @@ def get_clientWise_pnl(ctclWisePnl:dict):
         netPnl += float(ctcl['netPnl'])
     # print("realizedPnl: ", realizedPnl)
     return realizedPnl, m2mPnl, netPnl
+
+# zip & remove directory
+def zip_and_remove(directory_path, output_zip_name):
+    # 1. Create ZIP file
+    zip_file = shutil.make_archive(output_zip_name, 'zip', directory_path)
+    print(f"Created ZIP: {zip_file}")
+
+    # 2. Remove the original directory
+    shutil.rmtree(directory_path)
+    print(f"Removed directory: {directory_path}")
+
+# read csv file data from zip file
+def read_zip_data(zip_path, file_name):
+    with zipfile.ZipFile(zip_path) as z:
+        with z.open(file_name) as f:
+            df = pd.read_csv(f)
+    return df
 
 # # calculate net daily-pnl
 # def calculate_net_pnl(trades_df, bhav_df):
