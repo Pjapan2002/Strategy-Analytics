@@ -181,6 +181,11 @@ def Load_bhavCopy(exchange, date_str):
     except Exception as ex:
         print(f"bhavCopy loading failed! due to {ex}")
 
+def get_contractInfo(bhav_df, instrument_id):
+    row = bhav_df.loc[bhav_df['instrument_id'] == instrument_id,
+                ["sttlmPrice", "optionType", "strikePrice", "isExpiryToday"]
+                ].iloc[0].to_dict()
+    return row
 
 # calculate net daily-pnl
 def calculate_net_pnl(trades_df, bhav_df, prevOpenPosition_df):
@@ -247,7 +252,9 @@ def calculate_net_pnl(trades_df, bhav_df, prevOpenPosition_df):
                     else:
                         open_positions[sec][0][0] = open_qty
                 # append realized pnl
-                realized_trades.append([sec, match_qty, open_px, px, pnl, "short"])
+                row = get_contractInfo(bhav_df, sec)
+                # realized_trades.append([sec, match_qty, open_px, px, pnl, "short"])
+                realized_trades.append([sec, match_qty, open_px, px, pnl, "short", row['strikePrice'], row['optionType']])
 
         if side == 2: # SELL
             if len(open_positions[sec]) == 0:
@@ -281,11 +288,13 @@ def calculate_net_pnl(trades_df, bhav_df, prevOpenPosition_df):
                     else:
                         open_positions[sec][0][0] = open_qty
                 # append realized pnl
-                realized_trades.append([sec, match_qty, open_px, px, pnl, "long"])
+                row = get_contractInfo(bhav_df, sec)
+                realized_trades.append([sec, match_qty, open_px, px, pnl, "long", row['strikePrice'], row['optionType']])
 
     realized_df = pd.DataFrame(
         realized_trades,
-        columns=["instrument_id", "matchedQty", "buyPrice", "sellPrice", "realizedPnL", "position"]
+        # columns=["instrument_id", "matchedQty", "buyPrice", "sellPrice", "realizedPnL", "position"]
+        columns=["instrument_id", "matchedQty", "buyPrice", "sellPrice", "realizedPnL", "position", "strike", "optionType"]
     )
 
     # 2: calculate M2M-PnL using BhavCopy Close Price
@@ -320,14 +329,15 @@ def calculate_net_pnl(trades_df, bhav_df, prevOpenPosition_df):
 
             if open_side == 1: # closed long position
                 m2m_pnl = (close_price - avg_price) * total_qty
-                unrealized_trades.append([sec, total_qty, avg_price, close_price, m2m_pnl, "long"])
+                unrealized_trades.append([sec, total_qty, avg_price, close_price, m2m_pnl, "long", close_price_df['strikePrice'], close_price_df['optionType']])
             if open_side == 2: # closed short position
                 m2m_pnl = (avg_price - close_price ) * total_qty
-                unrealized_trades.append([sec, total_qty, close_price, avg_price, m2m_pnl, "short"])
+                unrealized_trades.append([sec, total_qty, close_price, avg_price, m2m_pnl, "short", close_price_df['strikePrice'], close_price_df['optionType']])
 
     unrealized_df = pd.DataFrame(
         unrealized_trades,
-        columns=["instrument_id", "matchedQty", "buyPrice", "sellPrice", "m2mPnl", "position"]
+        # columns=["instrument_id", "matchedQty", "buyPrice", "sellPrice", "m2mPnl", "position"]
+        columns=["instrument_id", "matchedQty", "buyPrice", "sellPrice", "m2mPnl", "position", "strike", "optionType"]
     )
 
     # get realized pnl for each instrument_ids

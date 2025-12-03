@@ -196,7 +196,7 @@ def get_pnl_df(pnl_dict:dict):
 
 if __name__ == "__main__": 
     try:                                                                                                 
-        # date_str = "20251127"
+        # date_str = "20251202"
         date_str = datetime.today().strftime("%Y%m%d")
         prev_date_str = get_previous_date(date_str)
         
@@ -220,20 +220,6 @@ if __name__ == "__main__":
         # get dc-database connection
         engine = get_mysql_connection(host=db_host, user=db_user, password=db_password, database=db_name, port=db_port)
 
-        # os.makedirs('dcTradeBook', exist_ok=True)
-        # _path = f'dcTradeBook/DC_NSE_{date_str}.csv'
-        # # get dc trades
-        # if not os.path.isfile(path):
-        #     # get for nse
-        #     df = get_dc_trades(engine, exchange)
-        #     df.to_csv(path, index=False)
-        #     # get for bse
-        #     _path = f'dcTradeBook/DC_BSE_{date_str}.csv'
-        #     df = get_dc_trades(engine, exchange)
-        #     df.to_csv(path, index=False)
-        #     # close script after getting dc bse/nse data
-        #     sys.exit()
-        
         if not script_df.empty:
             _date = str(script_df.at[0, 'todayDate'])
             isDataDownloaded = bool(script_df.at[0, 'isDataDownloaded'])
@@ -258,7 +244,6 @@ if __name__ == "__main__":
                 script_df.to_csv("scriptStatus.csv", index=False)
         
         # get previous date
-        # date_str = get_previous_date(date_str)
         run(engine, "BSE", date_str, pnl_dict)
         run(engine, "NSE", date_str, pnl_dict)
 

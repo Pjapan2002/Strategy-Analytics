@@ -30,7 +30,7 @@ def get_listOf_dates(directory, ascending=True):
 if __name__ == "__main__":
     try:
         allDates = get_listOf_dates("sqOffPosition")
-        # print(dates)
+        print(allDates)
         if not allDates:
             sys.exit()
         for date_str in allDates:
