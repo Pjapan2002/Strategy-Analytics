@@ -3,13 +3,15 @@ from utils import download_bhavCopy, Load_bhavCopy, read_zip_data
 import tarfile
 import zipfile
 import shutil
-# exchange = "NSE"
-# date_str = "20251125"
-# bhavCopy_df = Load_bhavCopy(exchange, date_str)
+
+exchange = "NSE"
+date_str = "20251125"
+bhavCopy_df = Load_bhavCopy(exchange, date_str)
+print(bhavCopy_df['optionType'].unique())
 # print(exchange)
-# print(bhavCopy_df.head())
-# print("*"*10)
-# print(bhavCopy_df.tail())
+print(bhavCopy_df.info())
+print("*"*10)
+print(bhavCopy_df.head())
 
 # def zip_and_remove(directory_path, output_zip_name):
 #     """
@@ -29,15 +31,15 @@ import shutil
 
 # zip_and_remove("sqOffPosition/20251127", "sqOffPosition/20251127")
 
-zip_path = "sqOffPosition/20251127.zip"
+# zip_path = "sqOffPosition/20251127.zip"
 # file_name = "m2mPnl_BSE_20251127.csv"
-file_name = "realizedPnl_BSE_20251127.csv"
+# file_name = "realizedPnl_BSE_20251127.csv"
 
 # with zipfile.ZipFile(zip_path) as z:
 #     with z.open(file_name) as f:
 #         df = pd.read_csv(f)
-df = read_zip_data(zip_path, file_name)
-print(df)
+# df = read_zip_data(zip_path, file_name)
+# print(df)
 # def read_zip_data(zip_path, file_name):
 #     with zipfile.ZipFile(zip_path) as z:
 #         with z.open(file_name) as f:

@@ -8,6 +8,7 @@ import os
 import zipfile
 import shutil
 import io
+import sys
 
 load_dotenv()
 
@@ -62,41 +63,6 @@ def Load_trades_from_redis():
 
 
 # download bhavCopy
-# def download_bhavCopy(date_str):
-#     try:
-#         url = f"https://www.bseindia.com/download/Bhavcopy/Derivative/BhavCopy_BSE_FO_0_0_0_{date_str}_F_0000.CSV"
-
-#         headers = {
-#             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-#             "Referer": "https://www.bseindia.com/markets/MarketInfo/BhavCopy.aspx",
-#         }
-
-#         os.makedirs("bhavCopys", exist_ok=True)
-
-#         response = requests.get(url, headers=headers, timeout=30)
-
-#         if response.status_code == 200:
-#             file_path = f"bhavCopys/BhavCopy_BSE_FO_{date_str}.csv"
-#             if os.path.isfile(file_path):
-#                 # raise Exception(f"Bse-fo-bhavCopy_{date_str} allready downloaded!")
-#                 print(f"Bse-fo-bhavCopy_{date_str} allready downloaded!")
-#                 return
-
-#             with open(file_path, "wb") as f:
-#                 f.write(response.content)
-#             print(f"✅ Bse-fo-bhavCopy_{date_str} successfully download!")
-#         else:
-#             print(f"❌ Failed with status code: {response.status_code} for {date_str}")
-
-#     except requests.exceptions.RequestException as e:
-#         print(f"⚠️ Network error while downloading BhavCopy for {date_str}: {e}")
-
-#     except OSError as e:
-#         print(f"⚠️ File system error while saving BhavCopy for {date_str}: {e}")
-
-#     except Exception as e:
-#         print(f"⚠️ Unexpected error occurred for {date_str}: {e}")
-
 def download_bhavCopy(date_str:str, exchange:str):
     try:
         if exchange == Exchange.NSE.value:
@@ -191,26 +157,46 @@ def Load_bhavCopy(exchange, date_str):
         #     bhavCopy['XpryDt'].astype(str).str.replace("-", "", regex=False) != date_str,
         #     :
         # ]
-        bhavCopy_df = bhavCopy.loc[:, ["FinInstrmId", "SttlmPric", "LastPric", "ClsPric", "isExpiryToday"]]
+        # bhavCopy_df = bhavCopy.loc[:, ["FinInstrmId", "SttlmPric", "LastPric", "ClsPric", "isExpiryToday"]]
+        # rename_dict = {
+        #     'FinInstrmId': 'instrument_id',
+        #     'SttlmPric': 'sttlmPrice',
+        #     'LastPric': 'lastPrice',
+        #     'ClsPric': 'closePrice',
+        #     'isExpiryToday': 'isExpiryToday'
+        # }
+        bhavCopy_df = bhavCopy.loc[:, ["FinInstrmId", "SttlmPric", "OptnTp", "StrkPric", "isExpiryToday"]]
         rename_dict = {
             'FinInstrmId': 'instrument_id',
             'SttlmPric': 'sttlmPrice',
-            'LastPric': 'lastPrice',
-            'ClsPric': 'closePrice',
+            'OptnTp': 'optionType',
+            'StrkPric': 'strikePrice',
             'isExpiryToday': 'isExpiryToday'
         }
         # bhavCopy_df = bhavCopy_df.rename(columns = {'FinInstrmId': 'instrument_id', 'SttlmPric': 'sttlmPrice', 'isExpiryToday': 'isExpiryToday'})
         bhavCopy_df = bhavCopy_df.rename(columns = rename_dict)
+        bhavCopy_df['optionType'] = bhavCopy_df['optionType'].fillna('FUT')
+        bhavCopy_df['strikePrice'] = bhavCopy_df['strikePrice'].fillna(0)
         return bhavCopy_df
     except Exception as ex:
         print(f"bhavCopy loading failed! due to {ex}")
 
 
 # calculate net daily-pnl
-def calculate_net_pnl(trades_df, bhav_df):
+def calculate_net_pnl(trades_df, bhav_df, prevOpenPosition_df):
     # sort trades by transaction-time
     # trades_df['transactTime'] = pd.to_datetime(trades_df['transactTime'])
     # trades_df = trades_df.sort_values(by="transactTime")
+
+    # update the overnight position price with prev.day close-price
+    # print(prevOpenPosition_df)
+    # sys.exit()
+    if prevOpenPosition_df:
+        for _, prevPos in prevOpenPosition_df.iterrows():
+            matchPos = trades_df[(trades_df['instrument_id'] == prevPos['instrument_id']) & (trades_df['qty'] == prevPos['matchedQty'])]
+            if not matchPos.empty:
+                posIndex = matchPos.index[0]
+                trades_df.at[posIndex, 'price'] = prevPos['sellPrice']
 
     # print(trades_df.head())
     print("calculate_net_pnl: called!!!")
@@ -225,8 +211,6 @@ def calculate_net_pnl(trades_df, bhav_df):
         qty = trade['qty']
         px = trade['price']
         side = trade['side']
-        # if side ==1 => qty positive else negative
-        # qty = qty if qty == 1 else qty*(-1)
         
         if sec not in open_positions:
             open_positions[sec] = []
@@ -249,18 +233,12 @@ def calculate_net_pnl(trades_df, bhav_df):
                         open_positions[sec].append([buy_qty, px, side])
                         buy_qty = 0
                         break
-                    # open_qty, open_px, open_side = open_positions[sec][0]
                     match_qty = min(open_qty, buy_qty)
 
                     pnl += (open_px - px) * match_qty
-                    # pnl += (open_px - px)
-                    # realized_trades.append([sec, match_qty, open_px, px, pnl])
-                    # realized_trades.append([sec, match_qty, open_px, px, pnl, "short"])
 
                     open_qty -= match_qty
                     buy_qty -= match_qty
-                    # open_qty += match_qty
-                    # buy_qty += match_qty
 
                     if open_qty == 0:
                         open_positions[sec].pop(0)
@@ -292,14 +270,9 @@ def calculate_net_pnl(trades_df, bhav_df):
                     match_qty = min(open_qty, sell_qty)
 
                     pnl += (px - open_px) * match_qty
-                    # pnl += (px - open_px)
-                    # realized_trades.append([sec, match_qty, open_px, px, pnl])
-                    # realized_trades.append([sec, match_qty, open_px, px, pnl, "long"])
 
                     open_qty -= match_qty
                     sell_qty -= match_qty
-                    # open_qty += match_qty
-                    # sell_qty += match_qty
 
                     if open_qty == 0:
                         open_positions[sec].pop(0)
@@ -326,38 +299,38 @@ def calculate_net_pnl(trades_df, bhav_df):
 
             # close_price = bhav_df.loc[bhav_df['instrument_id'] == sec, 'sttlmPrice']
             # close_price_df = bhav_df.loc[bhav_df['instrument_id'] == sec, ["sttlmPrice", "lastPrice", "closePrice", "isExpiryToday"]]
+            # close_price_df = bhav_df.loc[
+            #     bhav_df['instrument_id'] == sec,
+            #     ["sttlmPrice", "lastPrice", "closePrice", "isExpiryToday"]
+            #     ].iloc[0].to_dict()
             close_price_df = bhav_df.loc[
                 bhav_df['instrument_id'] == sec,
-                ["sttlmPrice", "lastPrice", "closePrice", "isExpiryToday"]
+                ["sttlmPrice", "optionType", "strikePrice", "isExpiryToday"]
                 ].iloc[0].to_dict()
             if close_price_df["isExpiryToday"]:
                 # close_price = close_price_df["closePrice"]
-                close_price = close_price_df["lastPrice"]
+                if close_price_df['optionType'] == 'CE':
+                    close_price = max(close_price_df["sttlmPrice"] - close_price_df["strikePrice"], 0)
+                elif close_price_df['optionType'] == 'PE':
+                    close_price = max(close_price_df["strikePrice"] - close_price_df["sttlmPrice"], 0)
+                elif close_price_df['optionType'] == 'FUT':
+                    close_price = close_price_df["sttlmPrice"]
             else:
                 close_price = close_price_df["sttlmPrice"]
-                # close_price = close_price_df["closePrice"]
-            # if len(close_price) == 0:
-            #     continue
-            # close_price = close_price.values[0]
 
             if open_side == 1: # closed long position
                 m2m_pnl = (close_price - avg_price) * total_qty
-                # m2m_pnl = (close_price*total_qty - avg_price)
                 unrealized_trades.append([sec, total_qty, avg_price, close_price, m2m_pnl, "long"])
             if open_side == 2: # closed short position
                 m2m_pnl = (avg_price - close_price ) * total_qty
-                # m2m_pnl = (avg_price - close_price*total_qty)
                 unrealized_trades.append([sec, total_qty, close_price, avg_price, m2m_pnl, "short"])
-
-            # unrealized_trades.append([sec, total_qty, avg_price, close_price, m2m_pnl])
 
     unrealized_df = pd.DataFrame(
         unrealized_trades,
         columns=["instrument_id", "matchedQty", "buyPrice", "sellPrice", "m2mPnl", "position"]
     )
 
-    # get realized pnl for each SecurityIds
-    # __realized_pnl = realized_df.groupby("instrument_id")["realizedPnL"].sum().reset_index()
+    # get realized pnl for each instrument_ids
     realized_df = realized_df.loc[realized_df["matchedQty"] != 0, :].reset_index(drop=True)
     __realized_pnl = realized_df.groupby("instrument_id")["realizedPnL"].sum().reset_index()
     net_realized_pnl = __realized_pnl["realizedPnL"].sum()

@@ -2,6 +2,7 @@ import requests
 import datetime
 import zipfile
 import io
+import pandas as pd
 
 # date = datetime.date.today()
 # date_str = date.strftime("%Y%m%d")
@@ -77,4 +78,19 @@ else:
 
 # r = requests.get(url, headers=headers)
 # print(r.status_code)
+
+if __name__ == "__main__":
+    date_str = "20251202"
+
+    script_df = pd.read_csv("scriptStatus.csv")
+    # print("row-1: ", script_df.at['row', 'isDataDownloaded'])
+    # value = script_df.at[0, 'isDataDownloaded']
+    # print("row-2: ", value)
+    script_df.at[0, 'isDataDownloaded'] = True
+
+    # script_df = pd.DataFrame([{"todayDate": str(date_str), "isDataDownloaded": False}])
+    script_df.to_csv("scriptStatus.csv", index=False)
+    
+    # df = pd.read_csv("scriptStatus.csv")
+    # print(df.info())
 

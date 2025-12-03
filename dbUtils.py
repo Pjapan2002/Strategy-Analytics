@@ -60,6 +60,8 @@ def parse_nse_trade(data):
     df['client_id'] = df['client_id'].str.strip()
     df["price"] = df["price"] / 1e2
     df["exchange"] = "NSE"
+    if len(str(df['ctcl'][0])) > 14:
+        df['ctcl'] = df['ctcl'].astype(str).str[:-2]
     return df
 
 def parse_bse_trade(data):
@@ -84,6 +86,8 @@ def parse_bse_trade(data):
     )
     df["price"] = df["price"] / 1e8
     df["exchange"] = "BSE"
+    if len(str(df['ctcl'][0])) > 14:
+        df['ctcl'] = df['ctcl'].astype(str).str[:-3]
     return df
 
 def get_dc_trades(connection, exchange):
@@ -105,8 +109,8 @@ def get_dc_trades(connection, exchange):
 
 if __name__ == "__main__":
     try:
-        date_str = "20251128"
-        exchange = "BSE"
+        date_str = "20251202"
+        exchange = "NSE"
         engine = get_mysql_connection(host=HOST, user=USER, password=PASSWORD, database=DATABASE, port=PORT)
         # # BSE
         # df = get_dc_trades(engine, "BSE")
