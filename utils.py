@@ -189,6 +189,7 @@ def get_contractInfo(bhav_df, instrument_id):
 
 # calculate net daily-pnl
 def calculate_net_pnl(trades_df, bhav_df, prevOpenPosition_df):
+    # sys.exit()
     # sort trades by transaction-time
     # trades_df['transactTime'] = pd.to_datetime(trades_df['transactTime'])
     # trades_df = trades_df.sort_values(by="transactTime")
@@ -196,15 +197,13 @@ def calculate_net_pnl(trades_df, bhav_df, prevOpenPosition_df):
     # update the overnight position price with prev.day close-price
     # print(prevOpenPosition_df)
     # sys.exit()
-    if prevOpenPosition_df:
+    if not prevOpenPosition_df.empty:
         for _, prevPos in prevOpenPosition_df.iterrows():
             matchPos = trades_df[(trades_df['instrument_id'] == prevPos['instrument_id']) & (trades_df['qty'] == prevPos['matchedQty'])]
             if not matchPos.empty:
                 posIndex = matchPos.index[0]
                 trades_df.at[posIndex, 'price'] = prevPos['sellPrice']
-
-    # print(trades_df.head())
-    print("calculate_net_pnl: called!!!")
+    
     # FIFO queue: {secID: [[qty, price], ...]}
     open_positions = {}
     realized_trades = []

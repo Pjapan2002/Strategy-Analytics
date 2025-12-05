@@ -81,7 +81,7 @@ def get_previous_openPosition(date_str, exchange):
         path = f"m2mPnl_{exchange}_{prevDateStr}.csv"
         df = read_zip_data(zip_path, path)
     else:
-        df = None
+        df = pd.DataFrame()
 
     return df
 
@@ -132,12 +132,16 @@ def run(engine, exchange, date_str, pnl_dict):
     # print("client_Ids: ", client_Ids)
     for client_id in client_Ids:
         client_df = df.loc[df['client_id'] == client_id, :].reset_index(drop=True)
+        if client_df.empty:
+            continue
         # get ctcls for the client_id
         ctcls = client_df['ctcl'].unique().tolist()
         print(f"ctcls: for client_id {client_id}: ", ctcls)
         ctclWisePnl = {}
         for ctcl in ctcls:
             ctcl_df = client_df.loc[client_df['ctcl'] == ctcl, :].reset_index(drop=True)
+            if ctcl_df.empty:
+                continue
             # ctcl_df = client_df.loc[client_df['ctcl'] == ctcl, ['transactTime', 'instrument_id', 'side', 'qty', 'price']].reset_index(drop=True)
             # get pnl
             pnl = calculate_net_pnl(trades_df=ctcl_df, bhav_df=bhavCopy_df, prevOpenPosition_df=prevOpenPosition_df)
@@ -196,7 +200,7 @@ def get_pnl_df(pnl_dict:dict):
 
 if __name__ == "__main__": 
     try:                                                                                                 
-        # date_str = "20251202"
+        # date_str = "20251203"
         date_str = datetime.today().strftime("%Y%m%d")
         prev_date_str = get_previous_date(date_str)
         
