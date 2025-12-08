@@ -198,7 +198,7 @@ def get_pnl_df(pnl_dict:dict):
     return df
                                          
 
-if __name__ == "__main__": 
+if __name__ == "__main__":
     try:                                                                                                 
         # date_str = "20251203"
         date_str = datetime.today().strftime("%Y%m%d")
@@ -239,11 +239,12 @@ if __name__ == "__main__":
                 script_df.at[0, 'isDataDownloaded'] = True
                 script_df.to_csv("scriptStatus.csv", index=False)
                 sys.exit()
-            elif prev_date_str == _date:
+            else:
                 if not isDataDownloaded:
                     script_df = script_df.drop(0)
                     sys.exit()
-                date_str = prev_date_str
+                # date_str = prev_date_str
+                date_str = _date
                 script_df = script_df.drop(0)
                 script_df.to_csv("scriptStatus.csv", index=False)
         
