@@ -187,8 +187,91 @@ def get_contractInfo(bhav_df, instrument_id):
                 ].iloc[0].to_dict()
     return row
 
+def calc_charges(buy_price, sell_price, qty, segment="OPTIONS", exchange="NSE"):
+    turnover = (buy_price * qty) + (sell_price * qty)
+    
+    # 1) BROKERAGE
+    if segment == "FUTURE":
+        # 0.03% or Rs 20 per executed order whichever is lower
+        brokerage_buy  = min(0.0003 * buy_price  * qty, 20)
+        brokerage_sell = min(0.0003 * sell_price * qty, 20)
+        brokerage = brokerage_buy + brokerage_sell
+    elif segment == "OPTIONS":
+        # 20 per executed order (buy + sell)
+        brokerage = 40
+
+    # 2) STT
+    if segment == "FUTURE":
+        stt = int(0.0002 * sell_price * qty)
+    elif segment == "OPTIONS":
+        stt = int(0.001 * sell_price * qty)
+
+    # 3) TRANSACTION CHARGES
+    if exchange == "NSE":
+        if segment == "FUTURE":
+            txn_rate = 0.0000173
+        elif segment == "OPTIONS":
+            txn_rate = 0.0003503
+    else:  # BSE
+        if segment == "FUTURE":
+            txn_rate = 0
+        elif segment == "OPTIONS":
+            txn_rate = 0.000325
+    transaction_charges = txn_rate * turnover
+
+    # 4) SEBI FEES
+    # ₹10 per crore
+    sebi_charges = (10 / 1e7) * turnover
+
+    # 5) STAMP DUTY (only BUY side)
+    if segment == "FUTURE":
+        stamp = 0.00002 * buy_price * qty
+    elif segment == "OPTIONS":
+        stamp = 0.00003 * buy_price * qty
+
+    # 6) GST (18% of brokerage + seb + txn)
+    gst = 0.18 * (brokerage + sebi_charges + transaction_charges)
+
+    # TOTAL CHARGES
+    total_charges = brokerage + stt + transaction_charges + sebi_charges + stamp + gst
+
+    gross_pnl = (sell_price - buy_price) * qty
+    net_pnl = gross_pnl - total_charges
+
+    return {
+        "gross_pnl": round(gross_pnl, 2),
+        "total_charges": round(total_charges, 2),
+        "net_pnl": round(net_pnl, 2),
+        "charges": {
+            "brokerage": round(brokerage, 2),
+            "stt": stt,
+            "transaction": round(transaction_charges, 2),
+            "sebi": round(sebi_charges, 2),
+            "stamp": round(stamp, 2),
+            "gst": round(gst, 2),
+        }
+    }
+
+
+def get_charge(df, exchange):
+
+    if df.empty:
+        return df.assign(txn=[], net_pnl=[])
+
+    def compute_row(row):
+        segment = "FUTURE" if row.optionType == "FUT" else "OPTIONS"
+        txn = calc_charges(row.buyPrice, row.sellPrice, row.matchedQty, segment, exchange)
+
+        total_charge = txn["total_charges"]
+        realized = row.get("realizedPnL", 0)
+
+        return pd.Series([total_charge, realized - total_charge])
+
+    df[["txn", "net_pnl"]] = df.apply(compute_row, axis=1).values
+    return df
+
 # calculate net daily-pnl
-def calculate_net_pnl(trades_df, bhav_df, prevOpenPosition_df):
+def calculate_net_pnl(trades_df, bhav_df, prevOpenPosition_df, exchange):
     # sys.exit()
     # sort trades by transaction-time
     # trades_df['transactTime'] = pd.to_datetime(trades_df['transactTime'])
@@ -253,7 +336,8 @@ def calculate_net_pnl(trades_df, bhav_df, prevOpenPosition_df):
                 # append realized pnl
                 row = get_contractInfo(bhav_df, sec)
                 # realized_trades.append([sec, match_qty, open_px, px, pnl, "short"])
-                realized_trades.append([sec, match_qty, open_px, px, pnl, "short", row['strikePrice'], row['optionType']])
+                # realized_trades.append([sec, match_qty, open_px, px, pnl, "short", row['strikePrice'], row['optionType']])
+                realized_trades.append([sec, match_qty, px, open_px, pnl, "short", row['strikePrice'], row['optionType']])
 
         if side == 2: # SELL
             if len(open_positions[sec]) == 0:
@@ -339,33 +423,64 @@ def calculate_net_pnl(trades_df, bhav_df, prevOpenPosition_df):
         columns=["instrument_id", "matchedQty", "buyPrice", "sellPrice", "m2mPnl", "position", "strike", "optionType"]
     )
 
+    # add charges
+    realized_df = get_charge(realized_df, exchange)
+    unrealized_df = get_charge(unrealized_df, exchange)
+
     # get realized pnl for each instrument_ids
     realized_df = realized_df.loc[realized_df["matchedQty"] != 0, :].reset_index(drop=True)
+    # realizedPnl
     __realized_pnl = realized_df.groupby("instrument_id")["realizedPnL"].sum().reset_index()
     net_realized_pnl = __realized_pnl["realizedPnL"].sum()
+    # print("net_realized_pnl: ", net_realized_pnl)
+    # net_realizedPnl
+    __realized_pnl = realized_df.groupby("instrument_id")["net_pnl"].sum().reset_index()
+    with_txn_net_realized_pnl = __realized_pnl["net_pnl"].sum()
+    # print("with_txn_net_realized_pnl: ", with_txn_net_realized_pnl)
+    # m2mpnl & netM2mpnl
     net_m2m_pnl = unrealized_df["m2mPnl"].sum()
+    with_txn_net_m2m_pnl = unrealized_df["net_pnl"].sum()
+    # print("with_txn_net_m2m_pnl: ", with_txn_net_m2m_pnl)
+    # net pnl with txn
     net_pnl = net_realized_pnl + net_m2m_pnl
-
+    with_txn_net_pnl = with_txn_net_realized_pnl + with_txn_net_m2m_pnl
+    # print("with_txn_net_pnl: ", with_txn_net_pnl)
     return {
         "Realized_df": realized_df,
         "UnRealized_df": unrealized_df,
         "data": {
             "realizedPnl": net_realized_pnl,
+            "withTxnRealizedPnl": with_txn_net_realized_pnl,
             "m2mPnl": net_m2m_pnl,
-            "netPnl": net_pnl
+            "withTxnM2MPnl": with_txn_net_m2m_pnl,
+            "netPnl": net_pnl,
+            "withTxnNetPnl": with_txn_net_pnl
         }
     }
 
 
+# def get_clientWise_pnl(ctclWisePnl:dict):
+#     realizedPnl, m2mPnl, netPnl = 0, 0, 0
+#     for ctcl in ctclWisePnl.values():
+#         # print(ctcl, "\n")
+#         realizedPnl += float(ctcl['realizedPnl'])
+#         m2mPnl += float(ctcl['m2mPnl'])
+#         netPnl += float(ctcl['netPnl'])
+#     # print("realizedPnl: ", realizedPnl)
+#     return realizedPnl, m2mPnl, netPnl
+
 def get_clientWise_pnl(ctclWisePnl:dict):
-    realizedPnl, m2mPnl, netPnl = 0, 0, 0
+    realizedPnl, withTxnRealizedPnl, m2mPnl, withTxnM2MPnl, netPnl, withTxnNetPnl = 0, 0, 0, 0, 0, 0
     for ctcl in ctclWisePnl.values():
         # print(ctcl, "\n")
         realizedPnl += float(ctcl['realizedPnl'])
+        withTxnRealizedPnl += float(ctcl['withTxnRealizedPnl'])
         m2mPnl += float(ctcl['m2mPnl'])
+        withTxnM2MPnl += float(ctcl['withTxnM2MPnl'])
         netPnl += float(ctcl['netPnl'])
+        withTxnNetPnl += float(ctcl['withTxnNetPnl'])
     # print("realizedPnl: ", realizedPnl)
-    return realizedPnl, m2mPnl, netPnl
+    return realizedPnl, withTxnRealizedPnl, m2mPnl, withTxnM2MPnl, netPnl, withTxnNetPnl
 
 # zip & remove directory
 def zip_and_remove(directory_path, output_zip_name):

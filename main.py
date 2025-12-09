@@ -144,7 +144,7 @@ def run(engine, exchange, date_str, pnl_dict):
                 continue
             # ctcl_df = client_df.loc[client_df['ctcl'] == ctcl, ['transactTime', 'instrument_id', 'side', 'qty', 'price']].reset_index(drop=True)
             # get pnl
-            pnl = calculate_net_pnl(trades_df=ctcl_df, bhav_df=bhavCopy_df, prevOpenPosition_df=prevOpenPosition_df)
+            pnl = calculate_net_pnl(trades_df=ctcl_df, bhav_df=bhavCopy_df, prevOpenPosition_df=prevOpenPosition_df, exchange=exchange)
             ctclWisePnl[ctcl] = pnl["data"]
             # append realized and m2m pnl dataframes
             # realized pnl
@@ -158,14 +158,19 @@ def run(engine, exchange, date_str, pnl_dict):
             realizedPnl_df_list.append(realizedPnl_df)
             m2mPnl_df_list.append(m2mPnl_df)
         # get total pnl for client_id
-        realizedPnl, m2mPnl, netPnl = get_clientWise_pnl(ctclWisePnl)
+        # realizedPnl, m2mPnl, netPnl = get_clientWise_pnl(ctclWisePnl)
+        realizedPnl, withTxnRealizedPnl, m2mPnl, withTxnM2MPnl, netPnl, withTxnNetPnl = get_clientWise_pnl(ctclWisePnl)
+        print("pnl info: ", realizedPnl, withTxnRealizedPnl, m2mPnl, withTxnM2MPnl, netPnl, withTxnNetPnl)
         unique_key = f"{client_id}_{exchange}"
         pnl_dict[unique_key] = {
             'exchange': exchange,
             'client_id': client_id,
             'realizedPnl': realizedPnl,
+            'withTxnRealizedPnl': withTxnRealizedPnl,
             'm2mPnl': m2mPnl,
+            'withM2mPnl': withTxnM2MPnl,
             'netPnl': netPnl,
+            'withTxnNetPnl': withTxnNetPnl,
             'ctclWisePnl': ctclWisePnl.copy()
         }
         ctclWisePnl.clear()
@@ -178,6 +183,25 @@ def run(engine, exchange, date_str, pnl_dict):
     # m2mPnl_df_final.to_csv(f"sqOffPosition/m2mPnl_{exchange}_{date_str}.csv", index=False)
     
 
+# def get_pnl_df(pnl_dict:dict):
+#     rows = []
+
+#     for key, d in pnl_dict.items():
+#         base = {
+#             "client_id": d["client_id"],
+#             "exchange": d["exchange"],
+#             "t_realizedPnl": d["realizedPnl"],
+#             "t_m2mPnl": d["m2mPnl"],
+#             "t_netPnl": d["netPnl"]
+#         }
+
+#         for ctcl, pnl in d["ctclWisePnl"].items():
+#             row = {**base, "ctcl": ctcl, **pnl}
+#             rows.append(row)
+#     print("rows: ", len(rows))
+#     df = pd.DataFrame(rows)
+#     return df
+
 def get_pnl_df(pnl_dict:dict):
     rows = []
 
@@ -186,8 +210,11 @@ def get_pnl_df(pnl_dict:dict):
             "client_id": d["client_id"],
             "exchange": d["exchange"],
             "t_realizedPnl": d["realizedPnl"],
+            "t_withTxn_realizedPnl": d["withTxnRealizedPnl"],
             "t_m2mPnl": d["m2mPnl"],
-            "t_netPnl": d["netPnl"]
+            "t_withTxn_m2mPnl": d["withM2mPnl"],
+            "t_netPnl": d["netPnl"],
+            "t_withTxn_netPnl": d["withTxnNetPnl"]
         }
 
         for ctcl, pnl in d["ctclWisePnl"].items():
@@ -200,7 +227,7 @@ def get_pnl_df(pnl_dict:dict):
 
 if __name__ == "__main__":
     try:                                                                                                 
-        # date_str = "20251203"
+        # date_str = "20251208"
         date_str = datetime.today().strftime("%Y%m%d")
         prev_date_str = get_previous_date(date_str)
         
@@ -239,7 +266,7 @@ if __name__ == "__main__":
                 script_df.at[0, 'isDataDownloaded'] = True
                 script_df.to_csv("scriptStatus.csv", index=False)
                 sys.exit()
-            else:
+            else:            
                 if not isDataDownloaded:
                     script_df = script_df.drop(0)
                     sys.exit()
