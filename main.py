@@ -6,7 +6,8 @@ import sys
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 # pnl_dict = { 
 #     'AW011_NSE': { 
@@ -226,7 +227,9 @@ def get_pnl_df(pnl_dict:dict):
                                          
 
 if __name__ == "__main__":
-    try:                                                                                                 
+    try:
+        os.makedirs("dcTradeBook", exist_ok=True)
+                                                                                                         
         # date_str = "20251208"
         date_str = datetime.today().strftime("%Y%m%d")
         prev_date_str = get_previous_date(date_str)
@@ -287,6 +290,8 @@ if __name__ == "__main__":
         # print(pnl_dict)
         pnl_df = get_pnl_df(pnl_dict)
         
+        os.makedirs("dailyPnl", exist_ok=True)
+
         pnl_df.to_csv(f"dailyPnl/dailyPnl_{date_str}.csv", index=False)
         # print(pnl_df.tail(20))
         # _df = pnl_df[pnl_df["client_id"] == "AW011"].copy()
